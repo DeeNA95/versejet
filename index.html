@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VerseJet Semantic Search Demo</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+        Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      padding: 2rem;
+      background: #f9fafb;
+      color: #111;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+      font-weight: 700;
+      color: #2c3e50;
+    }
+
+    #search-section {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    #query-input {
+      width: 60%;
+      padding: 0.5rem 0.75rem;
+      font-size: 1.1rem;
+      border: 1.5px solid #ccc;
+      border-radius: 6px;
+      transition: border-color 0.2s ease;
+    }
+
+    #query-input:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+    }
+
+    #search-button {
+      padding: 0.53rem 1rem;
+      font-size: 1.1rem;
+      border: none;
+      border-radius: 6px;
+      background-color: #007bff;
+      color: white;
+      font-weight: 600;
+      margin-left: 0.75rem;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+
+    #search-button:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
+    }
+
+    #results-container {
+      display: flex;
+      justify-content: space-between;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .result-box {
+      flex: 1 1 45%;
+      background: white;
+      padding: 1.25rem 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+      min-width: 280px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    .result-ref {
+      font-weight: 700;
+      font-size: 1.15rem;
+      color: #34495e;
+      margin-bottom: 0.5rem;
+    }
+
+    .result-text {
+      font-size: 1rem;
+      color: #222;
+      white-space: pre-wrap;
+      line-height: 1.4;
+      margin-bottom: 0.75rem;
+      flex-grow: 1;
+    }
+
+    .loading {
+      text-align: center;
+      font-size: 1.1rem;
+      font-style: italic;
+      color: #666;
+      margin-top: 1rem;
+    }
+
+    .error-message {
+      color: #d93025;
+      font-weight: 600;
+      margin-top: 1rem;
+      text-align: center;
+    }
+
+    @media (max-width: 720px) {
+      #query-input {
+        width: 100%;
+        margin-bottom: 0.75rem;
+      }
+      #search-button {
+        width: 100%;
+        margin-left: 0;
+      }
+      #results-container {
+        flex-direction: column;
+      }
+      .result-box {
+        flex-basis: 100%;
+      }
+    }
+    
+    .result-next-five {
+      font-size: 0.9rem;
+      font-style: italic;
+      color: #666;
+      margin-top: 0.5rem;
+      white-space: pre-wrap;
+      line-height: 1.3;
+    }
+  </style>
+</head>
+<body>
+  <h1>VerseJet Semantic Search Demo</h1>
+
+  <div id="search-section">
+    <input type="text" id="query-input" placeholder="Enter your Bible verse query here..." />
+    <button id="search-button">Search</button>
+    <div id="status-text" class="loading" style="display:none;">Loading...</div>
+    <div id="error-text" class="error-message" style="display:none;"></div>
+  </div>
+
+  <div id="results-container" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
+
+<script>
+  const queryInput = document.getElementById('query-input')
+  const searchButton = document.getElementById('search-button')
+  const resultsContainer = document.getElementById('results-container')
+  const statusText = document.getElementById('status-text')
+  const errorText = document.getElementById('error-text')
+
+  function clearResults() {
+    resultsContainer.innerHTML = ''
+    errorText.style.display = 'none'
+  }
+
+  function renderResult(result, index) {
+    const box = document.createElement('section')
+    box.className = 'result-box'
+    box.setAttribute('aria-label', `Search result ${index + 1}`)
+
+    const refElem = document.createElement('div')
+    refElem.className = 'result-ref'
+    refElem.textContent = result.ref
+
+    const textElem = document.createElement('div')
+    textElem.className = 'result-text'
+    textElem.textContent = result.text
+
+    box.appendChild(refElem)
+    box.appendChild(textElem)
+
+    // Add next_five context if available
+    if (result.next_five && result.next_five.trim().length > 0) {
+      const contextElem = document.createElement('div')
+      contextElem.className = 'result-next-five'
+      contextElem.textContent = result.next_five
+      box.appendChild(contextElem)
+    }
+
+    return box
+  }
+
+  async function doSearch() {
+    clearResults()
+    errorText.style.display = 'none'
+    const query = queryInput.value.trim()
+    if (query.length === 0) {
+      errorText.textContent = 'Please enter a query to search.'
+      errorText.style.display = 'block'
+      return
+    }
+
+    searchButton.disabled = true
+    statusText.style.display = 'block'
+
+    try {
+      const response = await fetch('http://localhost:8080/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query, k: 2 }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.error || `Server error: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      if (!data.results || data.results.length === 0) {
+        errorText.textContent = 'No results found for the query.'
+        errorText.style.display = 'block'
+        return
+      }
+
+      // Render max 2 results side by side
+      const maxResults = Math.min(2, data.results.length)
+      for (let i = 0; i < maxResults; i++) {
+        const result = data.results[i]
+        resultsContainer.appendChild(renderResult(result, i))
+      }
+    } catch (err) {
+      errorText.textContent = `Error: ${err.message}`
+      errorText.style.display = 'block'
+    } finally {
+      statusText.style.display = 'none'
+      searchButton.disabled = false
+    }
+  }
+
+  searchButton.addEventListener('click', () => doSearch())
+  queryInput.addEventListener('keyup', (event) => {
+    if (event.key === 'Enter') {
+      doSearch()
+    }
+  })
+</script>
+</body>
+</html>
