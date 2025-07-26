@@ -126,7 +126,7 @@
         flex-basis: 100%;
       }
     }
-    
+
     .result-next-five {
       font-size: 0.9rem;
       font-style: italic;
@@ -204,7 +204,7 @@
     statusText.style.display = 'block'
 
     try {
-      const response = await fetch('http://localhost:8080/query', {
+      const response = await fetch('/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: query, k: 2 }),

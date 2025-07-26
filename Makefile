@@ -15,22 +15,26 @@ INDEXER_BINARY=indexer
 DOCKER_IMAGE=versejet:latest
 GO_FILES=$(shell find . -name "*.go")
 
-# Build C library object file
-internal/hnsw/csrc/vector_search.o: internal/hnsw/csrc/vector_search.c internal/hnsw/csrc/vector_search.h
-	$(CC) -c -o $@ $< && ar rcs internal/hnsw/csrc/libvector_search.a $@
+TARGET_ARCH ?= amd64
+
+# Build C library object file and static library
+internal/hnsw/csrc/libvector_search.a: internal/hnsw/csrc/vector_search.c internal/hnsw/csrc/vector_search.h
+	@mkdir -p internal/hnsw/csrc
+	$(CC) -c -fPIC -O2 -fomit-frame-pointer -o internal/hnsw/csrc/vector_search.o internal/hnsw/csrc/vector_search.c
+	ar rcs internal/hnsw/csrc/libvector_search.a internal/hnsw/csrc/vector_search.o
 
 .PHONY: build-c
-build-c: internal/hnsw/csrc/vector_search.o
+build-c: internal/hnsw/csrc/libvector_search.a
 
 # Build targets
 build: build-c ## Build the main application with C lib
 	@echo "🔨 Building $(BINARY_NAME)..."
-	@env CGO_LDFLAGS="-Linternal/hnsw/csrc -lvector_search" go build -ldflags="-s -w" -o $(BINARY_NAME) main.go
+	@env CGO_LDFLAGS="-Linternal/hnsw/csrc -lvector_search -lm" go build -ldflags="-s -w" -o $(BINARY_NAME) main.go
 	@echo "✅ Build complete: $(BINARY_NAME)"
 
-build-indexer: ## Build the indexer CLI tool
+build-indexer: build-c ## Build the indexer CLI tool
 	@echo "🔨 Building $(INDEXER_BINARY)..."
-	@go build -ldflags="-s -w" -o $(INDEXER_BINARY) cmd/indexer/main.go
+	@env CGO_LDFLAGS="-Linternal/hnsw/csrc -lvector_search -lm" go build -ldflags="-s -w" -o $(INDEXER_BINARY) cmd/indexer/main.go
 	@echo "✅ Build complete: $(INDEXER_BINARY)"
 
 build-all: build build-indexer ## Build both main app and indexer
@@ -53,7 +57,7 @@ run-dev: check-env ## Run with development settings
 # Index management
 indexer: build-indexer ## Build and run the indexer
 	@echo "📚 Building verse index..."
-	@./$(INDEXER_BINARY) -text verses-1769.json -embeddings VersejetKJV.json -output data/bible-index.gob -verbose
+	@./$(INDEXER_BINARY) -text verses-1769.json -embeddings VersejetKJV_recreated.json -output data/bible-index.gob -verbose
 	@echo "✅ Index build complete"
 
 check-index: ## Check if index file exists
@@ -185,10 +189,10 @@ test-api: check-index ## Test API endpoints (requires running server)
 release-build: ## Build optimized release binaries
 	@echo "🚀 Building release binaries..."
 	@mkdir -p dist
-	@GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/$(BINARY_NAME)-linux-amd64 main.go
-	@GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/$(BINARY_NAME)-darwin-amd64 main.go
-	@GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/$(BINARY_NAME)-darwin-arm64 main.go
-	@GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/$(BINARY_NAME)-windows-amd64.exe main.go
+	@GOOS=linux GOARCH=$(TARGET_ARCH) go build -ldflags="-s -w" -o dist/$(BINARY_NAME)-linux-amd64 main.go
+	@GOOS=darwin GOARCH=$(TARGET_ARCH) go build -ldflags="-s -w" -o dist/$(BINARY_NAME)-darwin-amd64 main.go
+	@GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/$(BINARY_NAME)-darwin-arm64 main.go  # Keep arm64 for local, as TARGET_ARCH is for linux builds
+	@GOOS=windows GOARCH=$(TARGET_ARCH) go build -ldflags="-s -w" -o dist/$(BINARY_NAME)-windows-amd64.exe main.go
 	@echo "✅ Release binaries built in dist/"
 
 # Full development workflow

@@ -8,23 +8,23 @@ package hnsw
 
 // Helper function to create Vector from Go float array
 Vector* create_vector_from_array(float* data, int len) {
-    Vector* vec = (Vector*)malloc(sizeof(Vector));
-    vec->len = len;
-    vec->data = (float*)malloc(sizeof(float) * len);
-    for (int i = 0; i < len; i++) {
-        vec->data[i] = data[i];
-    }
-    return vec;
+	Vector* vec = (Vector*)malloc(sizeof(Vector));
+	vec->len = len;
+	vec->data = (float*)malloc(sizeof(float) * len);
+	for (int i = 0; i < len; i++) {
+		vec->data[i] = data[i];
+	}
+	return vec;
 }
 
 // Helper function to free Vector
 void free_vector(Vector* vec) {
-    if (vec) {
-        if (vec->data) {
-            free(vec->data);
-        }
-        free(vec);
-    }
+	if (vec) {
+		if (vec->data) {
+			free(vec->data);
+		}
+		free(vec);
+	}
 }
 
 // Serialization/deserialization wrappers
@@ -40,7 +40,7 @@ void free_serialized_buffer(char* buffer);
 
 // Wrapper for brute force cosine similarity k-NN search
 int* brute_force_knn_search_wrapper(Vector* vectors, int len, Vector* query, int k, float similarity_threshold, int* out_count) {
-    return brute_force_knn_search(vectors, len, query, k, similarity_threshold, out_count);
+	return brute_force_knn_search(vectors, len, query, k, similarity_threshold, out_count);
 }
 */
 import "C"

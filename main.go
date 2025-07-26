@@ -88,9 +88,20 @@ func main() {
 	mux.HandleFunc("/query", apiHandler.HandleQuery)
 	mux.HandleFunc("/healthz", handleHealth)
 
+	// Middleware to add Permissions-Policy header
+	withSecurityHeaders := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Permissions-Policy", "browsing-topics=(), interest-cohort=()")
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	// Wrap the mux with the middleware
+	handler := withSecurityHeaders(mux)
+
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", config.Port),
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,

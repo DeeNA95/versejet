@@ -43,6 +43,7 @@ type SearchResult struct {
 	Score float32 `json:"score"`
 }
 
+// REPLACED WITH C SEARCH IMPLEMENTATION FOR SPEED
 // Search performs cosine similarity search against all verses
 func (vi *VerseIndex) Search(queryEmbedding []float32, k int) ([]SearchResult, error) {
 	if len(queryEmbedding) == 0 {

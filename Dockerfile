@@ -1,55 +1,62 @@
-# Build stage
-FROM golang:1.21-alpine AS builder
+# Multi-stage Dockerfile for VerseJet
+
+# Stage 1: Build stage using Golang with necessary tools
+FROM golang:1.24-bookworm AS builder
+
+# Install build dependencies for C library
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    make \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Install git (needed for go mod download)
-RUN apk add --no-cache git
-
-# Copy go mod files
+# Copy go.mod and go.sum first for dependency caching
 COPY go.mod go.sum ./
 
-# Download dependencies
+# Download Go dependencies
 RUN go mod download
 
-# Copy source code
+# Copy the rest of the source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o versejet main.go
+# Build the C library
+RUN make build-c
 
-# Production stage
-FROM alpine:latest
+# Build the indexer
+RUN make build-indexer
 
-# Install ca-certificates for HTTPS requests to OpenAI
-RUN apk --no-cache add ca-certificates
+# Generate the bible-index.gob using the indexer
+RUN ./indexer -text verses-1769.json -embeddings VersejetKJV_recreated.json -output data/bible-index.gob
 
-# Create non-root user
-RUN addgroup -g 1001 versejet && \
-    adduser -D -s /bin/sh -u 1001 -G versejet versejet
+# Build the main application binary with CGO
+RUN make build
+
+# Stage 2: Runtime stage using lightweight Debian
+FROM debian:bookworm-slim
+
+# Install runtime dependencies if needed (minimal for CGO)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Copy binary from builder stage
-COPY --from=builder /app/versejet .
+# Copy the main binary from builder
+COPY --from=builder /app/versejet /app/versejet
 
-# Copy data directory (contains the bible-index.gob file)
-COPY --from=builder /app/data ./data
+# Copy the generated index file
+COPY --from=builder /app/data/bible-index.gob /app/data/bible-index.gob
 
-# Change ownership to non-root user
-RUN chown -R versejet:versejet /app
+# Copy the index.html for serving
+COPY --from=builder /app/index.html /app/index.html
 
-# Switch to non-root user
-USER versejet
-
-# Expose port
+# Expose the port the app runs on
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/healthz || exit 1
-
-# Run the application
-CMD ["./versejet"]
+# Set the entrypoint to the binary
+# Environment variables like OPENAI_API_KEY should be set at runtime
+CMD ["/app/versejet"]

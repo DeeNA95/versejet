@@ -40,7 +40,7 @@ cp configs/.env.sample .env
 go build -o indexer cmd/indexer/main.go
 
 # Generate the verse index (~195MB)
-./indexer -text verses-1769.json -embeddings VersejetKJV.json -output data/bible-index.gob
+./indexer -text verses-1769.json -embeddings VersejetKJV_recreated.json -output data/bible-index.gob
 ```
 
 ### 3. Run the Server
@@ -182,7 +182,7 @@ versejet/
 │   ├── api/              # HTTP handlers
 │   └── index/            # Search engine
 ├── verses-1769.json      # KJV verse text
-├── VersejetKJV.json      # Pre-computed embeddings
+├── VersejetKJV_recreated.json      # Pre-computed embeddings
 ├── Dockerfile            # Container configuration
 ├── docker-compose.yml    # Development setup
 └── main.go              # Application entry point
